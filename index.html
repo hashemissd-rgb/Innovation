@@ -67,10 +67,11 @@
     font-size: 14px;
     font-weight: 600;
     color: #fff;
-    min-width: 120px;
+    min-width: 150px;
     text-align: center;
-    transition: background 0.3s;
+    transition: background 0.4s, transform 0.1s;
   }
+  #gesture-badge.pop { transform: scale(1.08); }
   #fps-badge { font-size: 11px; color: rgba(255,255,255,0.5); }
 
   #instructions {
@@ -78,17 +79,17 @@
     bottom: 20px;
     right: 20px;
     z-index: 100;
-    background: rgba(0,0,0,0.6);
+    background: rgba(0,0,0,0.65);
     border: 1px solid rgba(255,255,255,0.1);
-    border-radius: 12px;
+    border-radius: 14px;
     padding: 14px 18px;
-    backdrop-filter: blur(10px);
+    backdrop-filter: blur(12px);
     font-size: 12px;
-    color: rgba(255,255,255,0.7);
-    line-height: 2;
+    color: rgba(255,255,255,0.75);
+    line-height: 2.2;
   }
-  .ins-row { display: flex; gap: 8px; align-items: center; }
-  .ins-icon { font-size: 16px; width: 22px; }
+  .ins-row { display: flex; gap: 10px; align-items: center; }
+  .ins-icon { font-size: 17px; width: 24px; }
 
   #loading {
     position: fixed;
@@ -102,14 +103,14 @@
     gap: 16px;
     color: #fff;
   }
-  #loading h1 { font-size: 22px; font-weight: 400; opacity: 0.9; }
+  #loading h1 { font-size: 22px; font-weight: 300; opacity: 0.9; letter-spacing: 2px; }
   #loading p { font-size: 14px; opacity: 0.5; }
   .spinner {
-    width: 40px; height: 40px;
-    border: 2px solid rgba(255,255,255,0.1);
-    border-top-color: rgba(255,255,255,0.8);
+    width: 42px; height: 42px;
+    border: 2px solid rgba(255,255,255,0.08);
+    border-top-color: rgba(255,255,255,0.85);
     border-radius: 50%;
-    animation: spin 0.8s linear infinite;
+    animation: spin 0.75s linear infinite;
   }
   @keyframes spin { to { transform: rotate(360deg); } }
 </style>
@@ -133,17 +134,18 @@
 
 <div id="ui">
   <div class="badge" id="gesture-badge">في انتظار اليد...</div>
-  <div class="badge" id="shape-badge">شكل: دائرة</div>
+  <div class="badge" id="shape-badge">شكل: كوكب 🪐</div>
+  <div class="badge" id="scale-badge">حجم: 100%</div>
   <div class="badge" id="fps-badge">FPS: --</div>
 </div>
 
 <div id="instructions">
-  <div class="ins-row"><span class="ins-icon">✊</span> قبضة → تجمع الجسيمات</div>
-  <div class="ins-row"><span class="ins-icon">🖐</span> يد مفتوحة → انتشار</div>
-  <div class="ins-row"><span class="ins-icon">☝</span> إصبع واحد → دائرة</div>
-  <div class="ins-row"><span class="ins-icon">✌</span> إصبعان → قلب</div>
-  <div class="ins-row"><span class="ins-icon">🤟</span> ثلاثة → انفجار</div>
-  <div class="ins-row"><span class="ins-icon">🖱</span> تحريك → جذب الجسيمات</div>
+  <div class="ins-row"><span class="ins-icon">✊</span> قبضة → كوكب أبيض</div>
+  <div class="ins-row"><span class="ins-icon">🖐</span> ٥ أصابع → انفجار الكوكب</div>
+  <div class="ins-row"><span class="ins-icon">☝</span> إصبع واحد → قلب أحمر</div>
+  <div class="ins-row"><span class="ins-icon">✌</span> إصبعان + قرص → تكبير/تصغير</div>
+  <div class="ins-row"><span class="ins-icon">🤟</span> ثلاثة أصابع → مجرة</div>
+  <div class="ins-row"><span class="ins-icon">🖖</span> أربعة أصابع → قلبان</div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
@@ -152,49 +154,49 @@
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils@0.3.1620248257/drawing_utils.js" crossorigin="anonymous"></script>
 
 <script>
-const loadingEl = document.getElementById('loading');
-const loadingMsg = document.getElementById('loading-msg');
+const loadingEl   = document.getElementById('loading');
+const loadingMsg  = document.getElementById('loading-msg');
 const gestureBadge = document.getElementById('gesture-badge');
-const shapeBadge = document.getElementById('shape-badge');
-const fpsBadge = document.getElementById('fps-badge');
+const shapeBadge   = document.getElementById('shape-badge');
+const scaleBadge   = document.getElementById('scale-badge');
+const fpsBadge     = document.getElementById('fps-badge');
 
 // ─── Three.js Setup ───────────────────────────────────────────────
-const W = window.innerWidth, H = window.innerHeight;
-const canvas = document.getElementById('canvas');
-const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-renderer.setSize(W, H);
+const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('canvas'), antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
-const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(75, W / H, 0.1, 1000);
-camera.position.z = 5;
+const scene  = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 1000);
+camera.position.z = 6;
 
 // ─── Particle System ──────────────────────────────────────────────
-const N = 3000;
+const N         = 4500;
 const positions = new Float32Array(N * 3);
-const colors = new Float32Array(N * 3);
-const velocities = [];
-const targets = new Float32Array(N * 3);
+const colors    = new Float32Array(N * 3);
+const velocities= [];
+const targets   = new Float32Array(N * 3);
+
+// Pre-baked random offsets so rebuilding shapes looks consistent
+const rnd = new Float32Array(N * 4);
+for (let i = 0; i < N * 4; i++) rnd[i] = Math.random();
 
 for (let i = 0; i < N; i++) {
-  positions[i*3]   = (Math.random() - 0.5) * 10;
-  positions[i*3+1] = (Math.random() - 0.5) * 10;
-  positions[i*3+2] = (Math.random() - 0.5) * 3;
+  positions[i*3]   = (rnd[i*4]   - 0.5) * 12;
+  positions[i*3+1] = (rnd[i*4+1] - 0.5) * 12;
+  positions[i*3+2] = (rnd[i*4+2] - 0.5) * 4;
   velocities.push({ x: 0, y: 0, z: 0 });
-  colors[i*3]   = Math.random();
-  colors[i*3+1] = Math.random() * 0.5;
-  colors[i*3+2] = 1;
 }
 
 const geo = new THREE.BufferGeometry();
 geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+geo.setAttribute('color',    new THREE.BufferAttribute(colors,    3));
 
 const mat = new THREE.PointsMaterial({
-  size: 0.04,
+  size: 0.05,
   vertexColors: true,
   transparent: true,
-  opacity: 0.85,
+  opacity: 0.92,
   sizeAttenuation: true,
   blending: THREE.AdditiveBlending,
   depthWrite: false
@@ -203,82 +205,11 @@ const mat = new THREE.PointsMaterial({
 const particles = new THREE.Points(geo, mat);
 scene.add(particles);
 
-// ─── Shape Targets ────────────────────────────────────────────────
-const SHAPES = ['circle', 'heart', 'explosion', 'grid', 'spiral'];
-let currentShape = 'circle';
-let shapeIndex = 0;
-
-function getShapeTarget(i, shape, cx, cy) {
-  const t = i / N;
-  const angle = t * Math.PI * 2;
-  const r = 2.5;
-  switch (shape) {
-    case 'circle':
-      return { x: cx + Math.cos(angle * N / 6) * r, y: cy + Math.sin(angle * N / 6) * r, z: 0 };
-    case 'heart': {
-      const a = t * Math.PI * 2;
-      return {
-        x: cx + 0.6 * 16 * Math.pow(Math.sin(a), 3) * 0.15,
-        y: cy + 0.6 * (13*Math.cos(a) - 5*Math.cos(2*a) - 2*Math.cos(3*a) - Math.cos(4*a)) * 0.15,
-        z: 0
-      };
-    }
-    case 'explosion': {
-      const er = Math.random() * 4 + 0.5;
-      return { x: cx + Math.cos(angle * 7) * er, y: cy + Math.sin(angle * 7) * er, z: (Math.random()-0.5)*2 };
-    }
-    case 'grid': {
-      const cols = Math.ceil(Math.sqrt(N));
-      const row = Math.floor(i / cols);
-      const col = i % cols;
-      return { x: cx + (col / cols - 0.5) * 6, y: cy + (row / cols - 0.5) * 6, z: 0 };
-    }
-    case 'spiral': {
-      const sr = t * 3;
-      const sa = t * Math.PI * 20;
-      return { x: cx + Math.cos(sa) * sr, y: cy + Math.sin(sa) * sr, z: t * 2 - 1 };
-    }
-    default:
-      return { x: cx, y: cy, z: 0 };
-  }
-}
-
-function buildTargets(shape, cx = 0, cy = 0) {
-  for (let i = 0; i < N; i++) {
-    const t = getShapeTarget(i, shape, cx, cy);
-    targets[i*3]   = t.x;
-    targets[i*3+1] = t.y;
-    targets[i*3+2] = t.z;
-  }
-}
-buildTargets('circle');
-
-// ─── Hand State ───────────────────────────────────────────────────
-let handX = 0, handY = 0;
-let handDetected = false;
-let gesture = 'none';
-let openFingers = 0;
-let lastGesture = '';
-let attractMode = false;
-let fistMode = false;
-
-function lerpColor(hue) {
-  for (let i = 0; i < N; i++) {
-    const speed = Math.sqrt(
-      velocities[i].x**2 + velocities[i].y**2 + velocities[i].z**2
-    );
-    const h = (hue + speed * 30 + i * 0.05) % 360;
-    const [r, g, b] = hslToRgb(h / 360, 0.9, 0.6);
-    colors[i*3]   = r;
-    colors[i*3+1] = g;
-    colors[i*3+2] = b;
-  }
-  geo.attributes.color.needsUpdate = true;
-}
-
+// ─── HSL → RGB ────────────────────────────────────────────────────
 function hslToRgb(h, s, l) {
   let r, g, b;
-  if (s === 0) { r = g = b = l; } else {
+  if (s === 0) { r = g = b = l; }
+  else {
     const hue2rgb = (p, q, t) => {
       if (t < 0) t += 1; if (t > 1) t -= 1;
       if (t < 1/6) return p + (q-p)*6*t;
@@ -286,125 +217,281 @@ function hslToRgb(h, s, l) {
       if (t < 2/3) return p + (q-p)*(2/3-t)*6;
       return p;
     };
-    const q = l < 0.5 ? l*(1+s) : l+s-l*s;
-    const p = 2*l-q;
+    const q = l < 0.5 ? l*(1+s) : l+s-l*s, p = 2*l-q;
     r = hue2rgb(p,q,h+1/3); g = hue2rgb(p,q,h); b = hue2rgb(p,q,h-1/3);
   }
   return [r, g, b];
 }
 
-// ─── Landmark → Screen Coords ─────────────────────────────────────
-function landmarkToWorld(lm) {
-  const x = -(lm.x - 0.5) * 10;
-  const y = -(lm.y - 0.5) * 8;
-  return { x, y };
+// ─── Color Modes ─────────────────────────────────────────────────
+let staticColors = false;
+let hue = 200;
+
+function setShapeColors(shape) {
+  staticColors = true;
+  for (let i = 0; i < N; i++) {
+    const t = i / N;
+    const ri = rnd[i*4], ri2 = rnd[i*4+1], ri3 = rnd[i*4+2];
+    switch (shape) {
+      case 'planet': {
+        // Pure white with cold blue shimmer
+        const v = 0.75 + ri * 0.25;
+        colors[i*3]   = v * 0.80;
+        colors[i*3+1] = v * 0.88;
+        colors[i*3+2] = v;
+        break;
+      }
+      case 'heart': {
+        // Vivid red → pink gradient
+        colors[i*3]   = 0.85 + ri  * 0.15;
+        colors[i*3+1] = ri2  * 0.22;
+        colors[i*3+2] = 0.10 + ri3 * 0.30;
+        break;
+      }
+      case 'galaxy': {
+        // Bright white core, blue/purple/teal arms + scattered star white
+        if (i < N * 0.05) {
+          // Core: warm white
+          colors[i*3] = 1; colors[i*3+1] = 0.97; colors[i*3+2] = 0.85;
+        } else if (ri3 < 0.08) {
+          // Random bright star
+          colors[i*3] = 1; colors[i*3+1] = 1; colors[i*3+2] = 1;
+        } else {
+          const armFrac = i % 3;
+          const h = armFrac === 0 ? 200 + ri*40  // blue arm
+                  : armFrac === 1 ? 260 + ri*40  // purple arm
+                  : 170 + ri*30;                  // teal arm
+          const [r,g,b] = hslToRgb(h/360, 0.85, 0.45 + ri2*0.4);
+          colors[i*3] = r; colors[i*3+1] = g; colors[i*3+2] = b;
+        }
+        break;
+      }
+      case 'twohearts': {
+        // Left heart: red, Right heart: deep pink
+        const isRight = i >= Math.floor(N/2);
+        colors[i*3]   = isRight ? (0.88 + ri*0.12)  : (0.92 + ri*0.08);
+        colors[i*3+1] = isRight ? (0.20 + ri2*0.20) : (0.05 + ri2*0.15);
+        colors[i*3+2] = isRight ? (0.45 + ri3*0.30) : (0.12 + ri3*0.20);
+        break;
+      }
+      case 'explosion': {
+        // Fiery orange→yellow→white core
+        const h2 = 10 + ri * 45;
+        const l2 = 0.55 + ri2 * 0.40;
+        const [r,g,b] = hslToRgb(h2/360, 1.0, l2);
+        colors[i*3] = r; colors[i*3+1] = g; colors[i*3+2] = b;
+        break;
+      }
+    }
+  }
+  geo.attributes.color.needsUpdate = true;
 }
 
-// ─── Gesture Detection ────────────────────────────────────────────
-function detectGesture(landmarks) {
-  const tips = [8, 12, 16, 20];
-  const mids = [6, 10, 14, 18];
-  let count = 0;
-
-  for (let i = 0; i < 4; i++) {
-    if (landmarks[tips[i]].y < landmarks[mids[i]].y) count++;
+function lerpColorDynamic() {
+  if (staticColors) return;
+  hue = (hue + 0.3) % 360;
+  for (let i = 0; i < N; i++) {
+    const spd = Math.sqrt(velocities[i].x**2 + velocities[i].y**2 + velocities[i].z**2);
+    const h = (hue + spd * 30 + i * 0.04) % 360;
+    const [r,g,b] = hslToRgb(h/360, 0.9, 0.6);
+    colors[i*3] = r; colors[i*3+1] = g; colors[i*3+2] = b;
   }
-  const thumbOpen = landmarks[4].x < landmarks[3].x;
-  if (thumbOpen) count++;
-  openFingers = count;
+  geo.attributes.color.needsUpdate = true;
+}
 
-  const palm = landmarks[0];
-  const middle = landmarks[12];
-  const palmSize = Math.hypot(palm.x - middle.x, palm.y - middle.y);
+// ─── Shape Targets ────────────────────────────────────────────────
+let planetScale  = 1.0;
+const MIN_SCALE  = 0.25;
+const MAX_SCALE  = 3.5;
 
-  if (count === 0) return 'fist';
-  if (count >= 4) return 'open';
+function getShapeTarget(i, shape, sc) {
+  const t = i / N;
+  switch (shape) {
+
+    case 'planet': {
+      // Perfect Fibonacci sphere
+      const phi   = Math.acos(1 - 2*(i+0.5)/N);
+      const theta = Math.PI * (1 + Math.sqrt(5)) * i;
+      return {
+        x: Math.sin(phi) * Math.cos(theta) * 2.2 * sc,
+        y: Math.cos(phi) * 2.2 * sc,
+        z: Math.sin(phi) * Math.sin(theta) * 2.2 * sc
+      };
+    }
+
+    case 'heart': {
+      const a = t * Math.PI * 2;
+      return {
+        x:  16 * Math.pow(Math.sin(a),3) * 0.20 * sc,
+        y: -(13*Math.cos(a) - 5*Math.cos(2*a) - 2*Math.cos(3*a) - Math.cos(4*a)) * 0.20 * sc,
+        z: (rnd[i*4+2] - 0.5) * 0.08
+      };
+    }
+
+    case 'galaxy': {
+      const numArms = 3;
+      const arm    = i % numArms;
+      const tLocal = Math.floor(i / numArms) / Math.ceil(N / numArms);
+      const r      = (tLocal * 3.8 + 0.1) * sc;
+      const base   = (arm / numArms) * Math.PI * 2;
+      const twist  = r * 1.6;
+      const scatter= (rnd[i*4]   - 0.5) * r * 0.22;
+      const scatterY=(rnd[i*4+1] - 0.5) * r * 0.08;
+      return {
+        x: Math.cos(base + twist) * r + scatter,
+        y: Math.sin(base + twist) * r * 0.22 + scatterY,
+        z: (rnd[i*4+2] - 0.5) * r * 0.18
+      };
+    }
+
+    case 'twohearts': {
+      const half     = Math.floor(N/2);
+      const isRight  = i >= half;
+      const j        = isRight ? i - half : i;
+      const a        = (j / half) * Math.PI * 2;
+      const size     = 0.13 * sc;
+      const offsetX  = (isRight ? 1.6 : -1.6) * sc;
+      return {
+        x: offsetX + 16 * Math.pow(Math.sin(a),3) * size,
+        y: -(13*Math.cos(a) - 5*Math.cos(2*a) - 2*Math.cos(3*a) - Math.cos(4*a)) * size,
+        z: (rnd[i*4+2] - 0.5) * 0.07
+      };
+    }
+
+    case 'explosion': {
+      // Radial burst using pre-baked randoms for consistency
+      const angle = rnd[i*4]   * Math.PI * 2;
+      const elev  = (rnd[i*4+1] - 0.5) * Math.PI;
+      const er    = (rnd[i*4+2] * 3.5 + 0.8) * sc;
+      return {
+        x: Math.cos(angle) * Math.cos(elev) * er,
+        y: Math.sin(elev) * er,
+        z: Math.sin(angle) * Math.cos(elev) * er * 0.55
+      };
+    }
+
+    default:
+      return { x: 0, y: 0, z: 0 };
+  }
+}
+
+function buildTargets(shape, sc = 1.0) {
+  for (let i = 0; i < N; i++) {
+    const t = getShapeTarget(i, shape, sc);
+    targets[i*3]   = t.x;
+    targets[i*3+1] = t.y;
+    targets[i*3+2] = t.z;
+  }
+}
+
+// Initialise with planet
+buildTargets('planet', planetScale);
+setShapeColors('planet');
+
+// ─── Pinch Tracking ───────────────────────────────────────────────
+let lastPinchDist = null;
+let currentShape  = 'planet';
+
+function getPinchDist(lm) {
+  const dx = lm[4].x - lm[8].x;
+  const dy = lm[4].y - lm[8].y;
+  return Math.sqrt(dx*dx + dy*dy);
+}
+
+// ─── Hand State ───────────────────────────────────────────────────
+let handX = 0, handY = 0;
+let handDetected = false;
+let gesture = 'none', lastGesture = '';
+
+// ─── Gesture Detection ────────────────────────────────────────────
+function detectGesture(lm) {
+  const tipIds = [8, 12, 16, 20];
+  const pipIds = [6, 10, 14, 18];
+  let count = 0;
+  for (let i = 0; i < 4; i++) {
+    if (lm[tipIds[i]].y < lm[pipIds[i]].y) count++;
+  }
+  // Thumb (x-axis based, works for frontal camera)
+  const thumbOpen = Math.abs(lm[4].x - lm[3].x) > 0.05
+                 || Math.abs(lm[4].x - lm[2].x) > 0.08;
+  const total = count + (thumbOpen ? 1 : 0);
+
+  if (total === 0) return 'fist';
+  if (total >= 5)  return 'open';
+  // Use only finger count (not thumb) for 1-4 classification
   if (count === 1) return '1finger';
   if (count === 2) return '2fingers';
   if (count === 3) return '3fingers';
+  if (count === 4) return '4fingers';
   return 'moving';
 }
 
 // ─── PiP Canvas ───────────────────────────────────────────────────
 const pipCanvas = document.getElementById('pip-canvas');
-const pipCtx = pipCanvas.getContext('2d');
+const pipCtx    = pipCanvas.getContext('2d');
+const HAND_CONNECTIONS = [
+  [0,1],[1,2],[2,3],[3,4],
+  [0,5],[5,6],[6,7],[7,8],
+  [5,9],[9,10],[10,11],[11,12],
+  [9,13],[13,14],[14,15],[15,16],
+  [13,17],[17,18],[18,19],[19,20],[0,17]
+];
 
-function drawPip(landmarks, W2, H2) {
-  pipCanvas.width = W2;
-  pipCanvas.height = H2;
-  pipCtx.clearRect(0, 0, W2, H2);
-
-  if (!landmarks) return;
-  const connections = [
-    [0,1],[1,2],[2,3],[3,4],
-    [0,5],[5,6],[6,7],[7,8],
-    [5,9],[9,10],[10,11],[11,12],
-    [9,13],[13,14],[14,15],[15,16],
-    [13,17],[17,18],[18,19],[19,20],[0,17]
-  ];
-  pipCtx.strokeStyle = 'rgba(100,200,255,0.7)';
+function drawPip(lm, W, H) {
+  pipCanvas.width = W; pipCanvas.height = H;
+  pipCtx.clearRect(0, 0, W, H);
+  if (!lm) return;
+  pipCtx.strokeStyle = 'rgba(120,210,255,0.75)';
   pipCtx.lineWidth = 1.5;
-  for (const [a, b] of connections) {
+  for (const [a, b] of HAND_CONNECTIONS) {
     pipCtx.beginPath();
-    pipCtx.moveTo(landmarks[a].x * W2, landmarks[a].y * H2);
-    pipCtx.lineTo(landmarks[b].x * W2, landmarks[b].y * H2);
+    pipCtx.moveTo(lm[a].x*W, lm[a].y*H);
+    pipCtx.lineTo(lm[b].x*W, lm[b].y*H);
     pipCtx.stroke();
   }
   pipCtx.fillStyle = '#fff';
-  for (const lm of landmarks) {
+  for (const p of lm) {
     pipCtx.beginPath();
-    pipCtx.arc(lm.x * W2, lm.y * H2, 2, 0, Math.PI * 2);
+    pipCtx.arc(p.x*W, p.y*H, 2.2, 0, Math.PI*2);
     pipCtx.fill();
   }
 }
 
+// ─── Badge Pop Animation ──────────────────────────────────────────
+function popBadge() {
+  gestureBadge.classList.remove('pop');
+  void gestureBadge.offsetWidth;
+  gestureBadge.classList.add('pop');
+  setTimeout(() => gestureBadge.classList.remove('pop'), 200);
+}
+
 // ─── Animation Loop ───────────────────────────────────────────────
-let hue = 200;
 let fpsTime = performance.now(), frameCount = 0;
-let attractCenter = { x: 0, y: 0 };
 
 function animate() {
   requestAnimationFrame(animate);
   frameCount++;
   const now = performance.now();
   if (now - fpsTime > 500) {
-    fpsBadge.textContent = `FPS: ${Math.round(frameCount * 1000 / (now - fpsTime))}`;
+    fpsBadge.textContent = `FPS: ${Math.round(frameCount*1000/(now-fpsTime))}`;
     frameCount = 0; fpsTime = now;
   }
 
-  hue = (hue + 0.3) % 360;
-  lerpColor(hue);
+  lerpColorDynamic();
+
+  const spring = currentShape === 'explosion' ? 0.025 : 0.042;
+  const damp   = 0.84;
 
   for (let i = 0; i < N; i++) {
-    const ix = i * 3;
+    const ix = i*3;
+    // Spring toward target
+    velocities[i].x += (targets[ix]   - positions[ix])   * spring;
+    velocities[i].y += (targets[ix+1] - positions[ix+1]) * spring;
+    velocities[i].z += (targets[ix+2] - positions[ix+2]) * spring;
 
-    if (fistMode && handDetected) {
-      // Gather toward hand
-      const dx = handX - positions[ix];
-      const dy = handY - positions[ix+1];
-      const dz = -positions[ix+2];
-      velocities[i].x += dx * 0.08;
-      velocities[i].y += dy * 0.08;
-      velocities[i].z += dz * 0.08;
-    } else if (attractMode && handDetected) {
-      // Attract toward hand position
-      const dx = handX - positions[ix];
-      const dy = handY - positions[ix+1];
-      const dist = Math.sqrt(dx*dx + dy*dy) + 0.01;
-      const force = Math.min(2 / dist, 0.3);
-      velocities[i].x += dx * force * 0.05;
-      velocities[i].y += dy * force * 0.05;
-      velocities[i].z += -positions[ix+2] * 0.02;
-    } else {
-      // Lerp toward target shape
-      velocities[i].x += (targets[ix]   - positions[ix])   * 0.04;
-      velocities[i].y += (targets[ix+1] - positions[ix+1]) * 0.04;
-      velocities[i].z += (targets[ix+2] - positions[ix+2]) * 0.04;
-    }
-
-    velocities[i].x *= 0.85;
-    velocities[i].y *= 0.85;
-    velocities[i].z *= 0.85;
+    velocities[i].x *= damp;
+    velocities[i].y *= damp;
+    velocities[i].z *= damp;
 
     positions[ix]   += velocities[i].x;
     positions[ix+1] += velocities[i].y;
@@ -412,18 +499,29 @@ function animate() {
   }
 
   geo.attributes.position.needsUpdate = true;
-  particles.rotation.z += 0.0005;
+
+  // Shape-specific rotation
+  if (currentShape === 'planet') {
+    particles.rotation.y += 0.0025;
+    particles.rotation.x += 0.0004;
+  } else if (currentShape === 'galaxy') {
+    particles.rotation.y += 0.0008;
+  } else {
+    particles.rotation.y *= 0.97;
+    particles.rotation.x *= 0.97;
+    particles.rotation.z += 0.0003;
+  }
+
   renderer.render(scene, camera);
 }
 
-// ─── MediaPipe Setup ──────────────────────────────────────────────
+// ─── MediaPipe ────────────────────────────────────────────────────
 async function initMediaPipe() {
   loadingMsg.textContent = 'تهيئة MediaPipe Hands...';
 
   const hands = new Hands({
-    locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/${file}`
+    locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/${f}`
   });
-
   hands.setOptions({
     maxNumHands: 1,
     modelComplexity: 1,
@@ -431,74 +529,108 @@ async function initMediaPipe() {
     minTrackingConfidence: 0.5
   });
 
-  hands.onResults((results) => {
-    if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-      const landmarks = results.multiHandLandmarks[0];
+  hands.onResults(results => {
+    if (results.multiHandLandmarks?.length > 0) {
+      const lm = results.multiHandLandmarks[0];
       handDetected = true;
 
-      const wrist = landmarks[0];
-      const world = landmarkToWorld(wrist);
-      handX = world.x;
-      handY = world.y;
+      // Wrist world position
+      const w = lm[0];
+      handX = -(w.x - 0.5) * 10;
+      handY = -(w.y - 0.5) * 8;
 
-      gesture = detectGesture(landmarks);
+      gesture = detectGesture(lm);
 
-      // Update shape based on gesture
+      // ── Continuous pinch scale ─────────────────────────────────
+      if (gesture === '2fingers') {
+        const pd = getPinchDist(lm);
+        if (lastPinchDist !== null) {
+          const delta = pd - lastPinchDist;
+          planetScale = Math.max(MIN_SCALE, Math.min(MAX_SCALE, planetScale + delta * 12));
+          buildTargets(currentShape, planetScale);
+          scaleBadge.textContent = `حجم: ${Math.round(planetScale*100)}%`;
+        }
+        lastPinchDist = pd;
+      } else {
+        lastPinchDist = null;
+      }
+
+      // ── Gesture change ─────────────────────────────────────────
       if (gesture !== lastGesture) {
         lastGesture = gesture;
+        popBadge();
+
         switch (gesture) {
+
           case 'fist':
-            fistMode = true; attractMode = false;
-            gestureBadge.textContent = '✊ قبضة — تجمع';
-            gestureBadge.style.background = 'rgba(200,50,50,0.4)';
+            currentShape = 'planet';
+            buildTargets('planet', planetScale);
+            setShapeColors('planet');
+            shapeBadge.textContent = 'شكل: كوكب 🪐';
+            gestureBadge.textContent = '✊ قبضة — كوكب أبيض';
+            gestureBadge.style.background = 'rgba(160,200,255,0.25)';
             break;
+
           case 'open':
-            fistMode = false; attractMode = false;
+            // Big burst: give particles explosive outward velocity
+            for (let i = 0; i < N; i++) {
+              const angle = rnd[i*4]   * Math.PI * 2;
+              const elev  = (rnd[i*4+1] - 0.5) * Math.PI;
+              const spd   = rnd[i*4+2] * 0.55 + 0.18;
+              velocities[i].x += Math.cos(angle) * Math.cos(elev) * spd * 1.8;
+              velocities[i].y += Math.sin(elev) * spd * 1.8;
+              velocities[i].z += Math.sin(angle) * Math.cos(elev) * spd * 0.9;
+            }
             currentShape = 'explosion';
-            buildTargets('explosion');
-            shapeBadge.textContent = 'شكل: انفجار';
-            gestureBadge.textContent = '🖐 مفتوحة — انتشار';
-            gestureBadge.style.background = 'rgba(50,200,100,0.4)';
+            buildTargets('explosion', 1.4);
+            setShapeColors('explosion');
+            shapeBadge.textContent = 'شكل: انفجار 💥';
+            gestureBadge.textContent = '🖐 مفتوحة — انفجار!';
+            gestureBadge.style.background = 'rgba(255,110,20,0.45)';
             break;
+
           case '1finger':
-            fistMode = false; attractMode = true;
-            currentShape = 'circle';
-            buildTargets('circle');
-            shapeBadge.textContent = 'شكل: دائرة';
-            gestureBadge.textContent = '☝ إصبع — دائرة';
-            gestureBadge.style.background = 'rgba(50,100,200,0.4)';
-            break;
-          case '2fingers':
-            fistMode = false; attractMode = false;
             currentShape = 'heart';
-            buildTargets('heart');
-            shapeBadge.textContent = 'شكل: قلب ❤';
-            gestureBadge.textContent = '✌ إصبعان — قلب';
-            gestureBadge.style.background = 'rgba(220,80,150,0.4)';
+            buildTargets('heart', planetScale);
+            setShapeColors('heart');
+            shapeBadge.textContent = 'شكل: قلب ❤️';
+            gestureBadge.textContent = '☝ إصبع — قلب أحمر';
+            gestureBadge.style.background = 'rgba(220,20,70,0.40)';
             break;
+
+          case '2fingers':
+            // Keep current shape, just update badge
+            shapeBadge.textContent = 'شكل: قرص 🔍';
+            gestureBadge.textContent = '✌ إصبعان — تكبير/تصغير';
+            gestureBadge.style.background = 'rgba(40,160,255,0.35)';
+            break;
+
           case '3fingers':
-            fistMode = false; attractMode = false;
-            currentShape = 'spiral';
-            buildTargets('spiral');
-            shapeBadge.textContent = 'شكل: حلزوني';
-            gestureBadge.textContent = '🤟 ثلاثة — حلزون';
-            gestureBadge.style.background = 'rgba(180,100,250,0.4)';
+            currentShape = 'galaxy';
+            buildTargets('galaxy', planetScale);
+            setShapeColors('galaxy');
+            shapeBadge.textContent = 'شكل: مجرة 🌌';
+            gestureBadge.textContent = '🤟 ثلاثة — مجرة';
+            gestureBadge.style.background = 'rgba(90,30,220,0.45)';
             break;
-          case 'moving':
-            fistMode = false; attractMode = true;
-            gestureBadge.textContent = '🖱 تحريك — جذب';
-            gestureBadge.style.background = 'rgba(100,180,200,0.4)';
+
+          case '4fingers':
+            currentShape = 'twohearts';
+            buildTargets('twohearts', planetScale);
+            setShapeColors('twohearts');
+            shapeBadge.textContent = 'شكل: قلبان 💕';
+            gestureBadge.textContent = '🖖 أربعة — قلبان';
+            gestureBadge.style.background = 'rgba(255,60,140,0.40)';
             break;
         }
       }
 
-      // PiP drawing
       const pip = document.getElementById('pip');
-      drawPip(landmarks, pip.clientWidth, pip.clientHeight);
+      drawPip(lm, pip.clientWidth, pip.clientHeight);
 
     } else {
       handDetected = false;
-      fistMode = false; attractMode = false;
+      lastPinchDist = null;
       gestureBadge.textContent = 'في انتظار اليد...';
       gestureBadge.style.background = 'rgba(0,0,0,0.4)';
       drawPip(null, 200, 150);
@@ -507,21 +639,21 @@ async function initMediaPipe() {
 
   loadingMsg.textContent = 'فتح الكاميرا...';
 
-  const video = document.getElementById('video');
+  const video    = document.getElementById('video');
   const pipVideo = document.getElementById('pip-video');
 
   try {
     const stream = await navigator.mediaDevices.getUserMedia({
       video: { width: 640, height: 480, facingMode: 'user' }
     });
-    video.srcObject = stream;
+    video.srcObject    = stream;
     pipVideo.srcObject = stream;
 
-    const camUtils = new Camera(video, {
+    const cam = new Camera(video, {
       onFrame: async () => { await hands.send({ image: video }); },
       width: 640, height: 480
     });
-    camUtils.start();
+    cam.start();
 
     loadingEl.style.transition = 'opacity 0.5s';
     loadingEl.style.opacity = '0';
@@ -530,20 +662,18 @@ async function initMediaPipe() {
 
   } catch (err) {
     loadingMsg.textContent = '⚠ لم يتم الوصول للكاميرا. يرجى السماح بالوصول.';
-    console.error(err);
     loadingEl.querySelector('.spinner').style.display = 'none';
+    console.error(err);
   }
 }
 
 // ─── Resize ───────────────────────────────────────────────────────
 window.addEventListener('resize', () => {
-  const w = window.innerWidth, h = window.innerHeight;
-  renderer.setSize(w, h);
-  camera.aspect = w / h;
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
 });
 
-// ─── Start ────────────────────────────────────────────────────────
 window.addEventListener('load', initMediaPipe);
 </script>
 </body>
